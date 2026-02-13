@@ -1,0 +1,15 @@
+[sqlfluff]
+templater = dbt
+dialect = snowflake
+exclude_rules = L009
+
+[sqlfluff:indentation]
+tab_space_size = 4
+
+[sqlfluff:capitalisation.keywords]
+capitalisation_policy = upper
+
+[sqlfluff:templater:dbt]
+project_dir = .
+profiles_dir = .
+profile = airbnb
