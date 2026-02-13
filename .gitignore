@@ -1,0 +1,5 @@
+.env
+logs/dbt.log
+airbnb/target/
+airbnb/dbt_packages/
+airbnb/logs/
