@@ -30,8 +30,6 @@ set-env.sh
 set-env.ps1
 /airbnb/target*/
 .env
-_prod_profiles/
-profiles.yml
 set-env.ps1
 logs/
 target/
