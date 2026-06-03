@@ -33,4 +33,4 @@ set-env.ps1
 set-env.ps1
 logs/
 target/
-dbt_packages/
+dbt_packages/ 
