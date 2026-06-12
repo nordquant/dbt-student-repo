@@ -8,4 +8,4 @@ Codespace setup:
 
 _Note: You don't need to create/activate a virtualenv in the Codespace. Everything has been set up for you._
 
-Have fun! :)  
+Have fun! :)  !
