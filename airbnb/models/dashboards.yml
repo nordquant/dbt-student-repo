@@ -1,0 +1,17 @@
+
+exposures:
+  - name: executive_dashboard
+    label: Executive Dashboard
+    type: dashboard
+    maturity: low
+    url: https://2c1160c7.us1a.app.preset.io/superset/dashboard/8/?native_filters_key=pClaqD2l3uY
+    description: Executive Dashboard about Airbnb listings and hosts
+
+
+    depends_on:
+      - ref('dim_listings_w_hosts')
+      - ref('mart_fullmoon_reviews')
+
+    owner:
+      name: Sergi Gil
+      email: sgilgranadero@gmail.com
