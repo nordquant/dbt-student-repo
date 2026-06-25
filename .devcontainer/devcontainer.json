@@ -1,0 +1,18 @@
+{
+	"name": "dbt Zero to Hero",
+	"image": "ghcr.io/nordquant/complete-dbt-bootcamp-zero-to-hero/dbt-bootcamp-devcontainer:latest",
+	"forwardPorts": [
+		5000
+	],
+	"postCreateCommand": "uv sync --frozen --no-install-project",
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"python.defaultInterpreterPath": "/opt/venv/bin/python",
+				"extensions.ignoreRecommendations": true,
+				"settingsSync.enabled": false,
+				"python.terminal.useEnvFile": false
+			}
+		}
+	}
+}

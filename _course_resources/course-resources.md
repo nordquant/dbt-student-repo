@@ -1,0 +1,1570 @@
+# Introduction and Environment Setup
+
+## How to figure out my Snowflake Account URL?
+The easiest way is to take a look at your Snowflake Registration email and copy the string before `.snowflakecomputing.com`. In my case, this is `frgcsyo-ie17820`. Keep in mind that sometimes URLs include the `.aws` tag, too, such as `frgcsyo-ie17820.aws`. This isn't simple, I know. Even _dbt Labs_ [has its own section](https://docs.getdbt.com/docs/cloud/connect-data-platform/connect-snowflake) on how to figure it out.
+
+<img width="980" alt="Screenshot 2024-10-21 at 10 36 03" src="https://github.com/user-attachments/assets/54faccde-5b57-413d-8e7c-2d5bbea5585a">
+
+## Automated Snowflake Setup
+I encourage you to go through the automated Snowflake Setup as importing the data and setting the permissions from scratch might take quite some time.
+Follow the instructions here https://udemy-dbt-setup.streamlit.app/ to set up your Snowflake database with a click of a button! ( If you encounter any issues with the link below, here is a backup server of the same application: https://dbtsetup.nordquant.com/ )
+
+## Snowflake data import (manual)
+_Only execute these commands if you decided to skip the Automated Snowflake Setup._
+
+It you want to generate key pairs on Windows, PuttyGen is quite intuitive. If you want more guidance of these, [please refer to this walkthrough](https://puttygen.com/).
+
+Resources presented:
+* [Snowflake Key-Pair Authentication page](https://docs.snowflake.com/en/user-guide/key-pair-auth)
+* [PuttyGen for Windows](https://puttygen.com/)
+* [AirBnb Source data locations](https://github.com/nordquant/complete-dbt-bootcamp-zero-to-hero/blob/main/_course_resources/source-data-locations.md)
+
+Copy these SQL statements into a Snowflake Worksheet, fill in the public key, select all and execute them (i.e. pressing the play button).
+
+```sql {#snowflake_import}
+-- Set up the defaults
+CREATE WAREHOUSE IF NOT EXISTS COMPUTE_WH;
+USE WAREHOUSE COMPUTE_WH;
+
+DROP DATABASE IF EXISTS AIRBNB CASCADE;
+
+CREATE DATABASE AIRBNB;
+
+CREATE SCHEMA IF NOT EXISTS AIRBNB.RAW;
+CREATE SCHEMA IF NOT EXISTS AIRBNB.DEV;
+
+USE DATABASE AIRBNB;
+USE SCHEMA RAW;
+
+-- Create our three tables and import the data from S3
+CREATE OR REPLACE TABLE raw_listings
+                    (id integer,
+                     listing_url string,
+                     name string,
+                     room_type string,
+                     minimum_nights integer,
+                     host_id integer,
+                     price string,
+                     created_at datetime,
+                     updated_at datetime);
+
+COPY INTO raw_listings (id,
+                        listing_url,
+                        name,
+                        room_type,
+                        minimum_nights,
+                        host_id,
+                        price,
+                        created_at,
+                        updated_at)
+                   from 's3://dbt-datasets/listings.csv'
+                    FILE_FORMAT = (type = 'CSV' skip_header = 1
+                    FIELD_OPTIONALLY_ENCLOSED_BY = '"');
+
+
+CREATE OR REPLACE TABLE raw_reviews
+                    (listing_id integer,
+                     date datetime,
+                     reviewer_name string,
+                     comments string,
+                     sentiment string);
+
+COPY INTO raw_reviews (listing_id, date, reviewer_name, comments, sentiment)
+                   from 's3://dbt-datasets/reviews.csv'
+                    FILE_FORMAT = (type = 'CSV' skip_header = 1
+                    FIELD_OPTIONALLY_ENCLOSED_BY = '"');
+
+
+CREATE OR REPLACE TABLE raw_hosts
+                    (id integer,
+                     name string,
+                     is_superhost string,
+                     created_at datetime,
+                     updated_at datetime);
+
+COPY INTO raw_hosts (id, name, is_superhost, created_at, updated_at)
+                   from 's3://dbt-datasets/hosts.csv'
+                    FILE_FORMAT = (type = 'CSV' skip_header = 1
+                    FIELD_OPTIONALLY_ENCLOSED_BY = '"');
+```
+
+### Snowflake user creation
+_Only execute these commands if you decided to skip the Automated Snowflake Setup._
+
+Copy these SQL statements into a Snowflake Worksheet, fill in the public key, select all and execute them (i.e. pressing the play button).
+
+```sql {#snowflake_setup}
+-- Use an admin role
+USE ROLE ACCOUNTADMIN;
+
+-- Create the `transform` role
+DROP ROLE IF EXISTS TRANSFORM;
+CREATE ROLE TRANSFORM;
+GRANT ROLE TRANSFORM TO ROLE ACCOUNTADMIN;
+
+-- Create the default warehouse if necessary
+GRANT OPERATE ON WAREHOUSE COMPUTE_WH TO ROLE TRANSFORM;
+
+-- Create the `dbt` user and assign to role
+DROP USER IF EXISTS dbt;
+CREATE USER IF NOT EXISTS dbt
+  LOGIN_NAME='dbt'
+  TYPE=SERVICE
+  RSA_PUBLIC_KEY="<<Add Your Public Key File's content here>>"
+  DEFAULT_ROLE=TRANSFORM
+  DEFAULT_WAREHOUSE='COMPUTE_WH'
+  DEFAULT_NAMESPACE='AIRBNB.RAW'
+  COMMENT='DBT user used for data transformation';
+
+GRANT ROLE TRANSFORM to USER dbt;
+
+-- Set up permissions to role `transform`
+GRANT ALL ON WAREHOUSE COMPUTE_WH TO ROLE TRANSFORM;
+GRANT ALL ON DATABASE AIRBNB to ROLE TRANSFORM;
+GRANT ALL ON ALL SCHEMAS IN DATABASE AIRBNB to ROLE TRANSFORM;
+GRANT ALL ON FUTURE SCHEMAS IN DATABASE AIRBNB to ROLE TRANSFORM;
+GRANT ALL ON ALL TABLES IN SCHEMA AIRBNB.RAW to ROLE TRANSFORM;
+GRANT ALL ON FUTURE TABLES IN SCHEMA AIRBNB.RAW to ROLE TRANSFORM;
+
+-- Create the user and permissions for Preset.io
+USE ROLE ACCOUNTADMIN;
+
+DROP ROLE IF EXISTS REPORTER;
+CREATE ROLE REPORTER;
+
+DROP USER IF EXISTS PRESET;
+CREATE USER PRESET
+  LOGIN_NAME='preset'
+  TYPE=SERVICE
+  RSA_PUBLIC_KEY="<<Add Your Public Key File's content here>>"
+  DEFAULT_WAREHOUSE='COMPUTE_WH'
+  DEFAULT_ROLE=REPORTER
+  DEFAULT_NAMESPACE='AIRBNB.DEV'
+ COMMENT='Preset user for creating reports';
+
+GRANT ROLE REPORTER TO USER PRESET;
+GRANT ROLE REPORTER TO ROLE ACCOUNTADMIN;
+GRANT ALL ON WAREHOUSE COMPUTE_WH TO ROLE REPORTER;
+GRANT USAGE ON DATABASE AIRBNB TO ROLE REPORTER;
+GRANT USAGE ON ALL SCHEMAS IN DATABASE AIRBNB to ROLE REPORTER;
+GRANT USAGE ON FUTURE SCHEMAS IN DATABASE AIRBNB to ROLE REPORTER;
+GRANT SELECT ON ALL TABLES IN SCHEMA AIRBNB.DEV to ROLE REPORTER;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA AIRBNB.DEV to ROLE REPORTER;
+
+```
+
+### Airstats tables - Capstone Setup
+_Only execute these commands if you decided to skip the Automated Snowflake Setup._
+
+Copy these SQL statements into a Snowflake Worksheet:
+https://github.com/nordquant/dbtlearn-snowflake-importer/blob/main/capstone-resources.md
+
+## dbt installation
+
+* Supported Python Versions: https://docs.getdbt.com/faqs/Core/install-python-compatibility
+* Student Repo: https://github.com/nordquant/dbt-student-repo
+* uv Installation guide: https://docs.astral.sh/uv/getting-started/installation/
+
+### uv Environment Setup
+```
+uv sync
+# Activate virtualenv on Windows (PowerShell):
+venv\Scripts\activate
+# Activate virtualenv on Mac:
+source venv/bin/activate
+```
+
+_Note:_ In some edge cases you might receive a _Permission Error_ message from PowerShell. In this case, students found executing this message solve the error:
+```
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+## dbt Project Setup
+Create a dbt project (all platforms):
+```sh
+dbt init --skip-profile-setup airbnb
+```
+Once done, drag and drop the `profiles.yml` file you downloaded to the `airbnb` folder.
+
+# Models
+## Code used in the lesson
+
+### SRC Listings
+`models/src/src_listings.sql`:
+
+```sql
+WITH raw_listings AS (
+    SELECT
+        *
+    FROM
+        AIRBNB.RAW.RAW_LISTINGS
+)
+SELECT
+    id AS listing_id,
+    name AS listing_name,
+    listing_url,
+    room_type,
+    minimum_nights,
+    host_id,
+    price AS price_str,
+    created_at,
+    updated_at
+FROM
+    raw_listings
+
+```
+
+### SRC Reviews
+`models/src/src_reviews.sql`:
+
+```sql
+WITH raw_reviews AS (
+    SELECT
+        *
+    FROM
+        AIRBNB.RAW.RAW_REVIEWS
+)
+SELECT
+    listing_id,
+    date AS review_date,
+    reviewer_name,
+    comments AS review_text,
+    sentiment AS review_sentiment
+FROM
+    raw_reviews
+```
+
+
+## Exercise
+
+Create a model which builds on top of our `raw_hosts` table.
+
+1) Call the model `models/src/src_hosts.sql`
+2) Use a CTE (common table expression) to define an alias called `raw_hosts`. This CTE selects every column from the raw hosts table `AIRBNB.RAW.RAW_HOSTS`
+3) In your final `SELECT`, select every column and record from `raw_hosts` and rename the following columns:
+   * `id` to `host_id`
+   * `name` to `host_name`
+
+### Solution
+
+```sql
+WITH raw_hosts AS (
+    SELECT
+        *
+    FROM
+       AIRBNB.RAW.RAW_HOSTS
+)
+SELECT
+    id AS host_id,
+    NAME AS host_name,
+    is_superhost,
+    created_at,
+    updated_at
+FROM
+    raw_hosts
+```
+
+# Models
+## Code used in the lesson
+
+### DIM Listings
+`models/dim/dim_listings_cleansed.sql`:
+
+```sql
+WITH src_listings AS (
+  SELECT
+    *
+  FROM
+    {{ ref('src_listings') }}
+)
+SELECT
+  listing_id,
+  listing_name,
+  room_type,
+  CASE
+    WHEN minimum_nights = 0 THEN 1
+    ELSE minimum_nights
+  END AS minimum_nights,
+  host_id,
+  REPLACE(
+    price_str,
+    '$'
+  ) :: NUMBER(
+    10,
+    2
+  ) AS price,
+  created_at,
+  updated_at
+FROM
+  src_listings
+```
+
+### DIM hosts
+`models/dim/dim_hosts_cleansed.sql`:
+
+```sql
+{{
+  config(
+    materialized = 'view'
+    )
+}}
+
+WITH src_hosts AS (
+    SELECT
+        *
+    FROM
+        {{ ref('src_hosts') }}
+)
+SELECT
+    host_id,
+    NVL(
+        host_name,
+        'Anonymous'
+    ) AS host_name,
+    is_superhost,
+    created_at,
+    updated_at
+FROM
+    src_hosts
+```
+
+## Exercise
+
+Create a new model in the `models/dim/` folder called `dim_hosts_cleansed.sql`.
+ * Use a CTE to reference the `src_hosts` model
+ * SELECT every column and every record, and add a cleansing step to host_name:
+   * If host_name is not null, keep the original value
+   * If host_name is null, replace it with the value ‘Anonymous’
+   * Use the NVL(column_name, default_null_value) function
+Execute `dbt run` and verify that your model has been created
+
+
+### Solution
+
+```sql
+WITH src_hosts AS (
+    SELECT
+        *
+    FROM
+        {{ ref('src_hosts') }}
+)
+SELECT
+    host_id,
+    NVL(
+        host_name,
+        'Anonymous'
+    ) AS host_name,
+    is_superhost,
+    created_at,
+    updated_at
+FROM
+    src_hosts
+```
+
+## Incremental Models
+The `fct/fct_reviews.sql` model:
+```sql
+{{
+  config(
+    materialized = 'incremental',
+    on_schema_change='fail'
+    )
+}}
+WITH src_reviews AS (
+  SELECT * FROM {{ ref('src_reviews') }}
+)
+SELECT * FROM src_reviews
+WHERE review_text is not null
+
+{% if is_incremental() %}
+  AND review_date > (select max(review_date) from {{ this }})
+{% endif %}
+```
+
+Get every review for listing _3176_:
+```sql
+SELECT * FROM "AIRBNB"."DEV"."FCT_REVIEWS" WHERE listing_id=3176;
+```
+
+Add a new record to the table:
+```sql
+INSERT INTO "AIRBNB"."RAW"."RAW_REVIEWS"
+VALUES (3176, CURRENT_TIMESTAMP(), 'Zoltan', 'excellent stay!', 'positive');
+
+```
+
+Making a full-refresh:
+```
+dbt run --full-refresh
+```
+
+### Reference Only - Incremental Strategies
+Link to the docs: https://docs.getdbt.com/docs/build/incremental-strategy
+
+#### Merge Strategy Example
+Taking the `fct/fct_reviews.sql` model:
+```sql
+{{
+  config(
+    materialized='incremental',
+    incremental_strategy='merge',
+    unique_key='review_id'
+  )
+}}
+WITH src_reviews AS (
+  SELECT * FROM {{ ref('src_reviews') }}
+)
+SELECT * FROM src_reviews
+WHERE review_text is not null
+
+{% if is_incremental() %}
+  AND review_date > (select max(review_date) from {{ this }})
+{% endif %}
+```
+
+
+## DIM listings with hosts
+The contents of `dim/dim_listings_w_hosts.sql`:
+```sql
+WITH
+l AS (
+    SELECT
+        *
+    FROM
+        {{ ref('dim_listings_cleansed') }}
+),
+h AS (
+    SELECT *
+    FROM {{ ref('dim_hosts_cleansed') }}
+)
+
+SELECT
+    l.listing_id,
+    l.listing_name,
+    l.room_type,
+    l.minimum_nights,
+    l.price,
+    l.host_id,
+    h.host_name,
+    h.is_superhost as host_is_superhost,
+    l.created_at,
+    GREATEST(l.updated_at, h.updated_at) as updated_at
+FROM l
+LEFT JOIN h ON (h.host_id = l.host_id)
+```
+
+## Dropping the views after ephemeral materialization
+```sql
+DROP VIEW AIRBNB.DEV.SRC_HOSTS;
+DROP VIEW AIRBNB.DEV.SRC_LISTINGS;
+DROP VIEW AIRBNB.DEV.SRC_REVIEWS;
+```
+
+# Sources and Seeds
+
+## Full Moon Dates CSV
+Download the CSV from the lesson's _Resources_ section, or download it from the following S3 location:
+https://dbt-datasets.s3.us-east-2.amazonaws.com/seed_full_moon_dates.csv
+
+Then place it to the `seeds` folder
+
+If you download from S3 on a Mac/Linux, you can import the CSV straight to your seed folder by executing this command:
+```sh
+curl https://dbt-datasets.s3.us-east-2.amazonaws.com/seed_full_moon_dates.csv -o seeds/seed_full_moon_dates.csv
+```
+
+## Contents of models/sources.yml
+```yaml
+sources:
+  - name: airbnb
+    schema: raw
+    tables:
+      - name: listings
+        identifier: raw_listings
+
+      - name: hosts
+        identifier: raw_hosts
+
+      - name: reviews
+        identifier: raw_reviews
+        config:
+          loaded_at_field: date
+          freshness:
+            warn_after: {count: 1, period: hour}
+            error_after: {count: 24, period: hour}
+```
+
+## Source Freshness
+Getting the exit code of the most recent process
+```
+# Mac/Linux:
+echo $?
+
+# Windows - Command Prompt (cmd)
+dir C:\nonexistent
+echo %ERRORLEVEL%
+
+# Windows - PowerShell
+$LASTEXITCODE
+```
+
+## Contents of models/mart/mart_fullmoon_reviews.sql
+```sql
+{{ config(
+  materialized = 'table',
+) }}
+
+WITH fct_reviews AS (
+    SELECT * FROM {{ ref('fct_reviews') }}
+),
+full_moon_dates AS (
+    SELECT * FROM {{ ref('seed_full_moon_dates') }}
+)
+
+SELECT
+  r.*,
+  CASE
+    WHEN fm.full_moon_date IS NULL THEN 'not full moon'
+    ELSE 'full moon'
+  END AS is_full_moon
+FROM
+  fct_reviews
+  r
+  LEFT JOIN full_moon_dates
+  fm
+  ON (TO_DATE(r.review_date) = DATEADD(DAY, 1, fm.full_moon_date))
+```
+
+# Snapshots
+
+## Snapshots for listing
+The contents of `snapshots/raw_listins_snapshot.yml`:
+```yaml
+snapshots:
+  - name: scd_raw_listings
+    relation: source('airbnb', 'listings')
+    config:
+      unique_key: id
+      strategy: timestamp
+      updated_at: updated_at
+      hard_deletes: invalidate
+```
+
+### Updating the table
+```sql
+UPDATE AIRBNB.RAW.RAW_LISTINGS SET MINIMUM_NIGHTS=30,
+    updated_at=CURRENT_TIMESTAMP() WHERE ID=3176;
+
+SELECT * FROM AIRBNB.DEV.SCD_RAW_LISTINGS WHERE ID=3176;
+```
+
+## Assignment: Snapshots for raw_hosts
+The contents of `snapshots/raw_hosts_snapshot.yml`:
+```yaml
+snapshots:
+  - name: scd_raw_hosts
+    relation: source('airbnb', 'hosts')
+    config:
+      unique_key: id
+      strategy: timestamp
+      updated_at: updated_at
+      hard_deletes: invalidate
+```
+
+# Tests
+
+## Generic Tests
+The contents of `models/schema.yml`:
+
+```yaml
+models:
+  - name: dim_listings_cleansed
+    columns:
+
+     - name: listing_id
+       data_tests:
+         - unique
+         - not_null
+
+     - name: host_id
+       data_tests:
+         - not_null
+         - relationships:
+             arguments:
+               to: ref('dim_hosts_cleansed')
+               field: host_id
+
+     - name: room_type
+       data_tests:
+         - accepted_values:
+             arguments:
+               values: ['Entire home/apt',
+                        'Private room',
+                        'Shared room',
+                        'Hotel room']
+```
+
+### Storing Test Failures:
+Add this to your `dbt_project.yml`:
+
+```
+data_tests:
+  +store_failures: true
+  +schema: _test_failures
+```
+
+Here is the link to [Elementary Data](https://www.elementary-data.com/) if you want to take testing to the next level. :)
+
+
+### Singular test for minimum nights check
+The contents of `tests/dim_listings_minimum_nights.sql`:
+
+```sql
+SELECT
+    *
+FROM
+    {{ ref('dim_listings_cleansed') }}
+WHERE minimum_nights < 1
+LIMIT 10
+```
+
+### Restricting test execution to a specific test
+```sh
+dbt test -s dim_listings_minimum_nights
+```
+
+## Unit Tests
+Add this to `models/mart/unit_tests.yml`:
+```yml
+unit_tests:
+  - name: unittest_fullmoon_matcher
+    model: mart_fullmoon_reviews
+    given:
+      - input: ref('fct_reviews')
+        rows:
+          - {review_date: '2025-01-13'}
+          - {review_date: '2025-01-14'}
+          - {review_date: '2025-01-15'}
+      - input: ref('seed_full_moon_dates')
+        rows:
+          - {full_moon_date: '2025-01-14'}
+    expect:
+      rows:
+        - {review_date: '2025-01-13', is_full_moon: "not full moon"}
+        - {review_date: '2025-01-14', is_full_moon: "not full moon"}
+        - {review_date: '2025-01-15', is_full_moon: "full moon"}
+```
+
+### Restricting test execution to tests associated with a specific model
+```sh
+dbt test -s mart_fullmoon_reviews
+```
+
+### Executing only unit tests
+```sh
+dbt test -s "test_type:unit"
+```
+
+## Contracts
+Add this to `models/schema.yml`:
+```
+  - name: dim_hosts_cleansed
+    config:
+        contract:
+          enforced: true
+    columns:
+      - name: host_id
+        data_type: integer
+      - name: host_name
+        data_type: string
+      - name: is_superhost
+        data_type: string
+      - name: updated_at
+        data_type: timestamp
+      - name: created_at
+        data_type: timestamp
+```
+
+## Exercise
+
+Create a singular test in `tests/consistent_created_at.sql` that checks that there is no review date that is submitted before its listing was created: Make sure that every `review_date` in `fct_reviews` is more recent than the associated `created_at` in `dim_listings_cleansed`.
+
+
+### Solution
+```sql
+SELECT * FROM {{ ref('dim_listings_cleansed') }} l
+INNER JOIN {{ ref('fct_reviews') }} r
+USING (listing_id)
+WHERE l.created_at > r.review_date
+```
+
+## Custom Generic Tests
+Add this to `tests/generic/positive_values.sql`:
+```sql
+{% test positive_values(model, column_name) %}
+SELECT * FROM {{ model }} WHERE {{ column_name }} <= 0
+{% endtest %}
+```
+
+## Constraints
+
+* [The constraints documentation](https://docs.getdbt.com/reference/resource-properties/constraints)
+
+1) We've changed the materialization of `models/dim/dim_hosts_cleansed.sql` to `table`
+2) Here is the final code for the constraint-specific part of `models/schema.yml`:
+```
+
+  - name: dim_hosts_cleansed
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: host_id
+        data_type: integer
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique
+      
+      - name: host_name
+        data_type: string
+        constraints:
+          - type: not_null
+      
+      - name: is_superhost
+        data_type: string
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['t', 'f']
+
+      - name: updated_at
+        data_type: timestamp
+
+      - name: created_at
+        data_type: timestamp
+```
+
+# Jinja, Macros and Packages
+## Jinja
+
+Execute Jinja in dbt:
+```sh
+dbt compile --inline "{# This is a comment #}{% set my_name = 'Zoltan' %}{{ my_name }}"
+```
+
+## Macros
+
+Our first macro. Add this to `macros/select_positive_values.sql`
+```sql
+{% macro select_positive_values(model, column_name) %}
+    SELECT *
+    FROM {{ model }}
+    WHERE {{ column_name }} > 0
+{% endmacro %}
+```
+
+Compile and execute it:
+```sh
+dbt compile --inline "{{ select_positive_values('dim_listings_cleansed', 'price') }}"
+dbt show --inline "{{ select_positive_values('dim_listings_cleansed', 'price') }}"
+```
+
+### Advanced Macros
+Add this to `macros/no_empty_strings.sql`:
+
+_This version doesn't have whitespace removal added as it's an assignment. Take a look at the reference solutions to find a version that removes whitespaces._
+```
+{# Here is my solution after removing most of the white spaces #}
+
+{% macro no_empty_strings(model) %}
+    {% for col in adapter.get_columns_in_relation(model) %}
+        {% if col.is_string() %}
+            {{ col.name }} IS NOT NULL AND {{ col.name }} <> '' AND
+        {% endif %}
+    {% endfor %}
+    TRUE
+{% endmacro %}
+```
+
+Compile and execute the macro:
+```
+dbt compile --inline "SELECT * FROM {{ ref('dim_listings_cleansed') }} WHERE {{ no_empty_strings(ref('dim_listings_cleansed')) }}"
+dbt show --inline "SELECT * FROM {{ ref('dim_listings_cleansed') }} WHERE {{ no_empty_strings(ref('dim_listings_cleansed')) }}"
+```
+## Custom Generic Tests
+The contents of `tests/generic/positive_values.sql`
+```sql
+{% test positive_values(model, column_name) %}
+SELECT * FROM {{ model }} WHERE {{ column_name }} <= 0
+{% endtest %}
+```
+
+## Setting Test Parameters
+The contents of `tests/generic/minimum_row_count.sql`:
+```sql
+{% test minimum_row_count(model, min_row_count) %}
+{{ config(severity = 'warn') }}
+
+SELECT
+    COUNT(*) as cnt
+FROM
+    {{ model }}
+HAVING
+    COUNT(*) < {{ min_row_count }}
+{% endtest %}
+```
+
+## Test Severity
+Add this to `models/schema.yml`:
+```yaml
+  - name: dim_listings_cleansed
+    description: Cleansed table which contains Airbnb listings.
+    data_tests:
+      - minimum_row_count:
+          arguments:
+            min_row_count: 1000
+          severity: error
+```
+
+## Packages
+The contents of `packages.yml`:
+```yaml
+packages:
+  - package: dbt-labs/dbt_utils
+    version: 1.3.0
+```
+
+The contents of ```models/fct_reviews.sql```:
+```
+{{
+  config(
+    materialized = 'incremental',
+    on_schema_change='fail'
+    )
+}}
+WITH src_reviews AS (
+  SELECT * FROM {{ ref('src_reviews') }}
+)
+SELECT
+  {{ dbt_utils.generate_surrogate_key(['listing_id', 'review_date', 'reviewer_name', 'review_text']) }}
+    AS review_id,
+  *
+  FROM src_reviews
+WHERE review_text is not null
+{% if is_incremental() %}
+  AND review_date > (select max(review_date) from {{ this }})
+{% endif %}
+```
+
+## Documentation
+
+The documentation-specific pieces of `models/schema.yml` after adding the documentation:
+```yaml
+
+models:
+  - name: dim_listings_cleansed
+    description: Cleansed table which contains Airbnb listings.
+    columns:
+
+      - name: listing_id
+        description: Primary key for the listing
+        data_tests:
+          - unique
+          - not_null
+
+      - name: host_id
+        description: The host's id. References the host table.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_hosts_cleansed')
+                field: host_id
+
+      - name: room_type
+        description: Type of the apartment / room
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Entire home/apt', 'Private room', 'Shared room', 'Hotel room']
+
+      - name: minimum_nights
+        description: '{{ doc("dim_listing_cleansed__minimum_nights") }}'
+        data_tests:
+          - positive_values
+
+  - name: dim_hosts_cleansed
+    columns:
+      - name: host_id
+        data_tests:
+          - not_null
+          - unique
+
+      - name: host_name
+        data_tests:
+          - not_null
+
+      - name: is_superhost
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['t', 'f']
+
+  - name: fct_reviews
+    columns:
+      - name: listing_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_listings_cleansed')
+                field: listing_id
+
+      - name: reviewer_name
+        data_tests:
+          - not_null
+
+      - name: review_sentiment
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['positive', 'neutral', 'negative']
+
+```
+The contents of `models/docs.md`:
+```txt
+{% docs dim_listing_cleansed__minimum_nights %}
+Minimum number of nights required to rent this property.
+
+Keep in mind that old listings might have `minimum_nights` set
+to 0 in the source tables. Our cleansing algorithm updates this to `1`.
+
+{% enddocs %}
+```
+
+The contents of `models/overview.md`:
+```md
+{% docs __overview__ %}
+# Airbnb pipeline
+
+Hey, welcome to our Airbnb pipeline documentation!
+
+Here is the schema of our input data:
+![input schema](https://dbt-datasets.s3.us-east-2.amazonaws.com/input_schema.png)
+
+{% enddocs %}
+```
+
+# Analyses, Hooks and Exposures
+
+## Analyses
+The contents of `analyses/full_moon_no_sleep.sql`:
+```sql
+WITH fullmoon_reviews AS (
+    SELECT * FROM {{ ref('mart_fullmoon_reviews') }}
+)
+SELECT
+    is_full_moon,
+    review_sentiment,
+    COUNT(*) as reviews
+FROM
+    fullmoon_reviews
+GROUP BY
+    is_full_moon,
+    review_sentiment
+ORDER BY
+    is_full_moon,
+    review_sentiment
+```
+
+## Hooks
+Changes made to `dbt_project.yml`:
+
+```
+on-run-start:
+  - "CREATE TABLE IF NOT EXISTS {{ target.schema }}.audit_log (
+      model_name STRING,
+      run_timestamp TIMESTAMP
+    )"
+
+models:
+  airbnb:
+    ...
+    +post-hook:
+      - "INSERT INTO {{ target.schema }}.audit_log VALUES ('{{ this }}', CURRENT_TIMESTAMP)"
+```
+
+## Grants
+Add `grants` to `dbt_project.yml`:
+```
+models:
+  airbnb:
+    grants:
+      select: ["transform", "reporter"]
+```
+
+## Creating a Dashboard in Preset
+
+Getting the Snowflake credentials up to the screen:
+
+* Mac / Linux / Windows Powershell: `cat ~/.dbt/profiles.yml `
+* Windows (cmd): `type %USERPROFILE%\.dbt\profiles.yml`
+
+## Exposures
+The contents of `models/dashboard.yml`:
+```yaml
+
+exposures:
+  - name: executive_dashboard
+    label: Executive Dashboard
+    type: dashboard
+    maturity: low
+    url: https://00d200da.us1a.app.preset.io/superset/dashboard/x/?edit=true&native_filters_key=fnn_HJZ0z42ZJtoX06x7gRbd9oBFgFLbnPlCW2o_aiBeZJi3bZuyfQuXE96xfgB
+    description: Executive Dashboard about Airbnb listings and hosts
+
+
+    depends_on:
+      - ref('dim_listings_w_hosts')
+      - ref('mart_fullmoon_reviews')
+
+    owner:
+      name: Zoltan C. Toth
+      email: dbtstudent@gmail.com
+```
+
+# Debugging Tests and Testing with dbt-expectations
+
+* The original Great Expectations project on GitHub: https://github.com/great-expectations/great_expectations
+* dbt-expectations: https://github.com/metaplane/dbt-expectations
+
+For the final code in _packages.yml_, _models/schema.yml_ and _models/sources.yml_, please refer to the course's Github repo:
+https://github.com/nordquant/complete-dbt-bootcamp-zero-to-hero
+
+## Testing a single model
+
+```
+dbt test --select dim_listings_w_hosts
+```
+
+Testing individual sources:
+
+```
+dbt test --select source:airbnb.listings
+```
+
+### The `--debug` parameter
+
+```
+dbt --debug test --select dim_listings_w_hosts
+```
+
+Keep in mind that in the lecture we didn't use the _--debug_ flag after all, as taking a look at the compiled SQL file is the better way of debugging tests.
+
+
+## Logging
+
+The contents of `macros/logging.sql`:
+```
+{% macro learn_logging() %}
+    {{ log("Call your mom!") }}
+    {{ log("Call your dad!", info=True) }} {# Logs to the screen, too #}
+--  {{ log("Call your dad!", info=True) }} {# This will be logged to the screen #}
+    {# log("Call your dad!", info=True) #} {# This won't be executed #}
+{% endmacro %}
+```
+
+Executing the macro:
+```
+dbt run-operation learn_logging
+```
+
+## Debugging YAML, SQL, models and general dbt bugs
+
+### Using `--empty` and `--sample`
+
+#### `--empty`
+```
+dbt run --empty
+# Check SQL: SELECT COUNT(*) FROM AIRBNB.DEV.DIM_LISTINGS_W_HOSTS;
+```
+
+#### `--sample`
+We've added the `event_time` config to `models/dim/dim_listings_cleansed.sql`:
+```
+{{
+  config(
+    materialized = 'view',
+    event_time='created_at'
+  )
+}} 
+WITH src_listings AS (
+    SELECT * FROM {{ ref('src_listings') }}
+)
+SELECT 
+  listing_id,
+  listing_name,
+  room_type,
+  CASE
+    WHEN minimum_nights = 0 THEN 1
+    ELSE minimum_nights
+  END AS minimum_nights,
+  host_id,
+  REPLACE(
+    price_str,
+    '$'
+  ) :: NUMBER(
+    10,
+    2
+  ) AS price,
+  created_at,
+  updated_at
+FROM
+  src_listings
+```
+
+Then we executed the sample:
+```
+dbt run -s dim_listings_w_hosts --sample "3 days"
+```
+_Watch out, the resulting table will be empty as we don't have data in `dim_listings_cleansed` for the past 3 days._
+
+You can check the SQL that's been executed in `target/run/airbnb/models/dim/dim_listings_w_hosts.sql`
+
+### Using Flags
+* Supported Flags: https://docs.getdbt.com/reference/global-configs/about-global-configs
+* Managing behavior changes with Flags: https://docs.getdbt.com/reference/global-configs/behavior-changes
+ 
+## Tags and Selectors
+
+We are adding tags to `dbt_project.yml`:
+```
+    fct:
+      +tags: ['fact']
+```
+
+And then also for the `models/mart/mart_fullmoon_reviews.sql`:
+```
+{{ config(
+  materialized = 'table',
+  tags = ['fact']
+) }}
+```
+
+### Executing selectors
+Our `selector.yml` file:
+```
+selectors:
+  - name: dim_except_listings_w_hosts
+    description: Selects all dim models, excluding dim_listings_w_hosts.
+    definition:
+      union:
+        - method: path
+          value: models/dim
+        - exclude:
+            - method: fqn
+              value: dim_listings_w_hosts
+
+```
+
+And the selector commands:
+```
+# Before dbt v1.12:
+dbt run --selector dim_except_listings_w_hosts
+
+# Starting from dbt v1.12
+dbt run -s selector:dim_except_listings_w_hosts
+```
+
+## Python Models
+The contents of `models/dim/dim_long_term_listings.py`:
+```python
+def model(dbt, session):
+    listings = dbt.ref("dim_listings_cleansed")
+
+    return (listings.filter(listings["MINIMUM_NIGHTS"] >= 30)
+                   .select("LISTING_ID", "LISTING_NAME", "PRICE"))
+```
+
+The contents of `models/dim/dim_fullmoon.py`:
+```python
+import holidays
+
+def is_holiday(date_col):
+    german_holidays = holidays.Germany()
+    is_holiday = (date_col in german_holidays)
+    return is_holiday
+
+def model(dbt, session):
+    dbt.config(
+        materialized = "table",
+        packages = ["holidays"]
+    )
+
+    orders_df = dbt.ref("seed_full_moon_dates")
+
+    df = orders_df.to_pandas()
+
+    df["IS_HOLIDAY"] = df["FULL_MOON_DATE"].apply(is_holiday)
+
+    # return final dataset (Pandas DataFrame)
+    return df
+```
+
+## Variables
+The contents of `macros/variables.sql`:
+```
+{% macro learn_variables() %}
+
+    {% set your_name_jinja = "Zoltan" %}
+    {{ log("Hello " ~ your_name_jinja, info=True) }}
+
+    {{ log("Hello dbt user " ~ var("user_name", "NO USERNAME IS SET!!") ~ "!", info=True) }}
+
+    {% if var("in_test", False) %}
+       {{ log("In test", info=True) }}
+    {% else %}
+       {{ log("NOT in test", info=True) }}
+    {% endif %}
+
+{% endmacro %}
+```
+
+We've added the following block to the end of `dbt_project.yml`:
+```
+vars:
+  user_name: default_user_name_for_this_project
+```
+
+An example of passing variables:
+```
+dbt run-operation learn_variables --vars "{user_name: zoltanctoth}"
+```
+
+More information on variable passing: https://docs.getdbt.com/docs/build/project-variables
+
+## dbt Orchestration
+
+### Links to different orchestrators
+
+ * [dbt integrations](https://docs.getdbt.com/docs/deploy/deployment-tools)
+ * [Apache Airflow](https://airflow.apache.org/)
+ * [Prefect](https://www.prefect.io/)
+ * [Prefect dbt Integration](https://www.prefect.io/blog/dbt-and-prefect)
+ * [Azure Data Factory](https://azure.microsoft.com/en-us/products/data-factory)
+ * [dbt Cloud](https://cloud.getdbt.com/deploy/)
+ * [Dagster](https://dagster.io/)
+
+### Dagster
+
+#### Set up your environment
+Let's install the `dagster-dbt` and the `dagster-webserver` package. These packages are located in [requirements.txt](requirements.txt).
+```
+pip install -r requirements.txt
+```
+
+#### Create a dagster project
+```
+dagster-dbt project scaffold --project-name my_dbt_dagster_project --dbt-project-dir=airbnb
+```
+
+_At this point in the course, open [schedules.py](dbt_dagster_project/dbt_dagster_project/schedules.py) and uncomment the schedule logic._
+
+#### Start dagster
+Now that our project is created, start the Dagster server:
+
+##### On Windows - PowerShell (Like the VSCode Terminal Window)
+```
+cd dbt_dagster_project
+dagster dev
+```
+
+We will continue our work on the dagster UI at [http://localhost:3000/](http://localhost:3000)
+
+#### Making incremental models compatible with orchestrators:
+The updated contents of `models/fct/fct_reviews.sql`:
+```
+{{
+  config(
+    materialized = 'incremental',
+    on_schema_change='fail'
+    )
+}}
+WITH src_reviews AS (
+  SELECT * FROM {{ ref('src_reviews') }}
+)
+SELECT
+  {{ dbt_utils.generate_surrogate_key(['listing_id', 'review_date', 'reviewer_name', 'review_text']) }} as review_id,
+  *
+FROM src_reviews
+WHERE review_text is not null
+
+{% if is_incremental() %}
+  {% if var("start_date", False) and var("end_date", False) %}
+    {{ log('Loading ' ~ this ~ ' incrementally (start_date: ' ~ var("start_date") ~ ', end_date: ' ~ var("end_date") ~ ')', info=True) }}
+    AND review_date >= '{{ var("start_date") }}'
+    AND review_date < '{{ var("end_date") }}'
+  {% else %}
+    AND review_date > (select max(review_date) from {{ this }})
+    {{ log('Loading ' ~ this ~ ' incrementally (all missing dates)', info=True)}}
+  {% endif %}
+{% endif %}
+```
+
+Passing a time range to our incremental model:
+```
+dbt run --select fct_reviews  --vars '{start_date: "2024-02-15 00:00:00", end_date: "2024-03-15 23:59:59"}'
+```
+
+Reference - Working with incremental strategies: https://docs.getdbt.com/docs/build/incremental-models#about-incremental_strategy
+
+# dbt in Production
+
+## Microbatching
+The Snowflake SQL we executed:
+```
+SELECT min(review_date), max(review_date) FROM AIRBNB.DEV.FCT_REVIEWS
+```
+
+_Don't forget to update `threads` to `4` in `profiles.yml`, otherwise microbatching might hang (a dbt bug since v1.9)_
+The Snowflake SQL we executed:
+```
+SELECT min(review_date), max(review_date) FROM AIRBNB.DEV.FCT_REVIEWS
+```
+
+_Don't forget to update `threads` to `4` in `profiles.yml`, otherwise microbatching might hang (a dbt bug since v1.9)_
+
+Update the `models/mart/mart_fullmoon_reviews.sql` config:
+```
+{{ config(
+  materialized = 'incremental',
+  incremental_strategy='microbatch',
+  event_time='review_date',
+  begin='2009-06-20',
+  batch_size='year',
+  full_refresh=false
+) }}
+```
+
+Add an event_time config to `models/fct/fct_reviews.sql`:
+```
+{{
+  config(
+    materialized = 'incremental',
+    on_schema_change='fail',
+    event_time='review_date'
+    )
+}}
+```
+
+Use this command to force a full-refresh
+```
+dbt run -s mart_fullmoon_reviews --full-refresh --event-time-start "2020-01-01" --event-time-end "2030-01-01"
+```
+
+## Model Lifecycle - Versioning, Deprecating, Disabling Models
+The contents of `models/dim/dim_hosts_cleansed_v2.sql`:
+```sql
+{#
+  You might have `view` as the materialization as we only 
+  replace `materialized` with `table` when we implement constraints. 
+#}
+{{
+  config(
+    materialized = 'table' 
+    )
+}} 
+WITH src_hosts AS (
+    SELECT
+        *
+    FROM
+        {{ ref('src_hosts') }}
+)
+SELECT
+    host_id,
+    NVL(
+        host_name,
+        'N/A'
+    ) AS host_name,
+    is_superhost,
+    created_at,
+    updated_at
+FROM
+    src_hosts
+```
+
+The final versioning block in `models/schema.yml`:
+```yaml
+    versions:
+      - v: 1
+        defined_in: dim_hosts_cleansed
+        deprecation_date: 2030-01-01
+      - v: 2
+        columns:
+          - include: '*'
+            exclude: [host_name]
+          - name: host_name
+            description: The name of the host (N/A if not available)
+            data_type: string
+            constraints:
+              - type: not_null
+    latest_version: 2
+```
+
+The final pinning of `models/dim/dim_listings_w_hosts.sql`:
+```sql
+    FROM {{ ref('dim_hosts_cleansed', v=2) }}
+```
+
+## Working with Targets
+In `profiles.yml` now you have two sections:
+```yaml
+airbnb:
+  outputs:
+    dev:
+      type: snowflake
+      ...
+    prod:
+      type: snowflake
+      ...
+  target: dev
+```
+Running against the `prod` target:
+```
+dbt build --target prod
+```
+
+## Environment Variables
+
+We are using this profile. Save it to the `airbnb/_prod_profiles` folder): [`airbnb/_prod_profiles/profiles.yml`](../airbnb/_prod_profiles/profiles.yml)
+
+Download the set-env files (both Windows and Mac) from https://dbtsetup.nordquant.com.
+
+### Windows
+_Take a look at the top lines `set-env.sh` for the `Set-ExecutionPolicy` command that you might need to run if you run into permission issues._
+
+**Ensure you run a PowerShell shell and not `cmd`**
+
+Execute these commands:
+```
+. ..\set-env.ps1
+$env:DBT_ENV_NAME="MYDEV"
+```
+
+### Mac / Linux
+```
+. ../set-env.sh
+export DBT_ENV_NAME="MYDEV"
+```
+
+Test it out (both platforms):
+```
+dbt debug --profiles-dir _prod_profiles
+```
+
+## Working with Custom Schemas
+We've added the a `schema` config to `models/mart/mart_fullmoon_reviews.sql`:
+```
+{{ config(
+  materialized = 'incremental',
+  incremental_strategy='microbatch',
+  event_time='review_date',
+  begin='2009-06-20',
+  batch_size='year',
+  full_refresh=false,
+  tags = ['fact'],
+  schema='mart'
+) }}
+
+...
+```
+
+Building for `prod` with the new profile (custom schema materialization test):
+```
+dbt build --target prod --profiles-dir=_prod_profiles --empty
+```
+
+The custom schema behavior is defined in [`macros/generate_schema_name.sql`](../airbnb/macros/generate_schema_name.sql).
+
+## Cleaning up Schemas
+
+The schema cleanup behavior is defined in [`macros/drop_dev_schemas.sql`](../airbnb/macros/drop_dev_schemas.sql).
+
+Run this command to execute it:
+```
+dbt run-operation drop_dev_schemas --profiles-dir _prod_profiles
+```
+
+## Working with State
+
+### dbt Retry
+
+We introduced a syntax error in the `models/dim/dim_listings_cleansed.sql` model and then tried to build it with executing:
+```
+dbt build --profiles-dir _prod_profiles
+```
+
+Once the error has been fixed, we resume dbt by:
+```
+dbt retry --profiles-dir _prod_profiles
+```
+
+### Working with multiple states
+Compile state to production:
+```
+dbt compile --profiles-dir _prod_profiles --target prod --target-path target-prod            
+```
+
+See what we've changed:
+```
+dbt ls --profiles-dir _prod_profiles --target dev --state target-prod --select state:modified
+```
+
+Then try to build the modified model:
+```
+dbt run-operation drop_dev_schemas --profiles-dir _prod_profiles
+dbt run --profiles-dir _prod_profiles --target dev --state target-prod --select state:modified
+```
+
+### Deferring state
+```
+dbt run-operation drop_dev_schemas --profiles-dir _prod_profiles
+dbt run --profiles-dir _prod_profiles --target dev --state target-prod --select state:modified --defer
+```
+
+## Impementing Slim CI and Production Pipelines
+Here is the reference repo we are building upon:
+
+https://github.com/zoltanctoth/dbt-reference-production-repo
+
+# dbt Power User
+
+## Working with Legacy Code
+
+Please copy [these two files](https://github.com/nordquant/complete-dbt-bootcamp-zero-to-hero/tree/poweruser/airbnb/models/intermediate) into the repo so that you have the same `intermediate` files Steven uses.
+
+## Building Models with AI
+
+Here is the prompt Steven uses in the _Building Models with AI_ section:
+```
+Create an intermediate model called int_host_performance that calculates host-level performance metrics.
+
+Use the following upstream models:
+dim_hosts_cleansed for host data
+dim_listings_cleaned for listing data
+
+Calculate these metrics per host:
+- total_listings: count of listings
+- avg_listing_price: average price across listings
+- min_listing_price: minimum price
+- max_listing_price: maximum price
+- room type distribution (entire_home_count, private_room_count, shared_room_count, hotel_room_count)
+- avg_minimum_nights: average minimum night
+
+Add these classifications:
+- portfolio_size: based on listing count (inactive = 0, single_listing = 1, small_portfolio = 2-5, medium_portfolio = 6-15, large_portfolio = 16+)
+- host_status: 'superhost' if is_superhost = 't', else 'standard'
+- host_tenure: based on created_at (new_host <1 year, experienced_host 1-3 years, veteran_host 3+ years)
+- dominant_room_type: the room type with most listing
+
+save to models/intermediate/int_host_performance.sql
+```
