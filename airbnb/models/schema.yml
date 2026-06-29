@@ -96,6 +96,8 @@ models:
           - dbt_expectations.expect_column_values_to_be_of_type:
               arguments:
                 column_type: NUMBER
+      - name: price_str
+        data_type: string
       - name: host_id
         data_type: integer
       - name: host_name
