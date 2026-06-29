@@ -13,6 +13,7 @@ select
      else minimum_nights end as minimum_nights,
     host_id,
     REPLACE(price_str,'$')::NUMERIC(10, 2) as price,
+    price_str,
     created_at,
     updated_at
     from src_listing
