@@ -26,8 +26,10 @@ jobs:
           cache-dependency-glob: "pyproject.toml"
       - run: uv python install 3.13
       - run: uv sync
-      - run: cd airbnb && uv run dbt deps --profiles-dir _prod_profiles --target prod
-      - run: cd airbnb && uv run dbt build --profiles-dir _prod_profiles --target prod
+      - run: test -n "$SNOWFLAKE_ACCOUNT" || (echo "SNOWFLAKE_ACCOUNT missing" && exit 1)
+      - run: test -n "$DBT_USER" || (echo "DBT_USER missing" && exit 1)
+      - run: test -n "$PRIVATE_KEY" || (echo "PRIVATE_KEY missing" && exit 1)
+      - run: test -n "$PRIVATE_KEY_PASSPHRASE" || (echo "PRIVATE_KEY_PASSPHRASE missing" && exit 1)
       - name: Upload prod target as artifact
         uses: actions/upload-artifact@v4
         with:
