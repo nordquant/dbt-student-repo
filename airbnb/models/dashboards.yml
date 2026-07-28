@@ -1,0 +1,16 @@
+exposures:
+  - name: executive_dashboard
+    label: Executive Dashboard
+    type: dashboard
+    maturity: low
+    url: https://f65e15db.us1a.app.preset.io/superset/explore/p/JOA7xo8d0q8/
+    description: Executive Dashboard about Airbnb listings and hosts
+      
+
+    depends_on:
+      - ref('dim_listings_w_hosts')
+      - ref('mart_fullmoon_reviews')
+
+    owner:
+      name: WEIXUANCHEN
+      email: weixuanc45@gmail.com
