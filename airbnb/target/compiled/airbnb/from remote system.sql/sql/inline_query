@@ -1,0 +1,6 @@
+SELECT * FROM AIRBNB.DEV.dim_listings_cleansed WHERE (
+    
+            LISTING_NAME IS NOT NULL AND LISTING_NAME <> '' AND
+            ROOM_TYPE IS NOT NULL AND ROOM_TYPE <> '' AND
+    TRUE
+)
