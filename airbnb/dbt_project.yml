@@ -45,9 +45,14 @@ models:
       select: ["transform","reporter"]
     +post-hook:
       - "INSERT INTO {{ target.schema }}.audit_log values('{{this}}',current_timestamp)"
-    example:
-      +materialized: view
+    # example:
+    #   +materialized: view
     dim:
       +materialized: table
     src:
       +materialized: ephemeral
+    fct:
+      +tags: ['fact']
+
+vars:
+  user_name: "default user_name for this project!"

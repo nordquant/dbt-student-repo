@@ -1,6 +1,13 @@
 {{
     config(
-        materialized='table'
+        materialized='incremental',
+        incremental_strategy = 'microbatch',
+        event_time="review_date",
+        begin="2009-06-20",
+        batch_size="year",
+        full_refresh=false,
+        tags = ['fact'],
+        schema='mart'
     )
 }}
 with fact_reviews as 
