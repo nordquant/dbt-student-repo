@@ -1,0 +1,89 @@
+{
+    "path_count": 353,
+    "parsed_path_count": 353,
+    "static_analysis_path_count": 8,
+    "static_analysis_parsed_path_count": 7,
+    "is_partial_parse_enabled": true,
+    "is_static_analysis_enabled": true,
+    "read_files_elapsed": 0.019991500000060114,
+    "load_macros_elapsed": 0.4766587090000485,
+    "parse_project_elapsed": 0.6246264589999555,
+    "patch_sources_elapsed": 0.020098749999988286,
+    "process_manifest_elapsed": 0.07444133300009526,
+    "load_all_elapsed": 1.2705828749999455,
+    "projects": [
+        {
+            "project_name": "airbnb",
+            "elapsed": 0.6158285829999386,
+            "parsers": [
+                {
+                    "parser": "model",
+                    "elapsed": 0.12950437499989675,
+                    "parsed_path_count": 8
+                },
+                {
+                    "parser": "analysis",
+                    "elapsed": 0.0560510840000461,
+                    "parsed_path_count": 1
+                },
+                {
+                    "parser": "test",
+                    "elapsed": 0.04716029099995467,
+                    "parsed_path_count": 2
+                },
+                {
+                    "parser": "seed",
+                    "elapsed": 0.06550337500016212,
+                    "parsed_path_count": 1
+                },
+                {
+                    "parser": "doc",
+                    "elapsed": 8.616700006314204e-05,
+                    "parsed_path_count": 2
+                },
+                {
+                    "parser": "test",
+                    "elapsed": 0.27174120800009405,
+                    "parsed_path_count": 6
+                }
+            ],
+            "parsed_path_count": 20
+        },
+        {
+            "project_name": "dbt_snowflake",
+            "elapsed": 0.001609959000006711,
+            "parsers": [],
+            "parsed_path_count": 0
+        },
+        {
+            "project_name": "dbt",
+            "elapsed": 0.0017682499999409629,
+            "parsers": [
+                {
+                    "parser": "doc",
+                    "elapsed": 8.933399999477842e-05,
+                    "parsed_path_count": 1
+                }
+            ],
+            "parsed_path_count": 1
+        },
+        {
+            "project_name": "dbt_utils",
+            "elapsed": 0.0022397499999442516,
+            "parsers": [],
+            "parsed_path_count": 0
+        },
+        {
+            "project_name": "dbt_date",
+            "elapsed": 0.0015436670000781305,
+            "parsers": [],
+            "parsed_path_count": 0
+        },
+        {
+            "project_name": "dbt_expectations",
+            "elapsed": 0.0015326670002195897,
+            "parsers": [],
+            "parsed_path_count": 0
+        }
+    ]
+}

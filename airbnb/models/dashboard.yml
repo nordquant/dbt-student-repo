@@ -1,0 +1,16 @@
+
+exposures:
+  - name: executive_dashboard
+    label: Executive Dashboard
+    type: dashboard
+    maturity: low
+    url: https://eb7d2941.us2a.app.preset.io/superset/dashboard/8/?edit=true&native_filters_key=b375Xj8z5SQ
+    description: Executive Dashboard about Airbnb listings and hosts
+
+
+    depends_on:
+      - ref('mart_fullmoon_reviews')
+
+    owner:
+      name: Aniceto Junior
+      email: anicetojunior@gmail.com
