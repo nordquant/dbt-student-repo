@@ -1,5 +1,5 @@
 with src_reviews as(
-select * from AIRBNB.RAW.RAW_REVIEWS
+select * from {{source('airbnb', 'reviews')}}
 )
 select 
 DATE as review_date,

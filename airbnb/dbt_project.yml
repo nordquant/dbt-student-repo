@@ -8,6 +8,7 @@ dbt-cloud:
 seed-paths: ["seeds"]
 model-paths: ["models"]
 macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
 
 clean-targets:
   - "target"
@@ -25,3 +26,6 @@ models:
       +materialized: table
     src:
       +materialized: ephemeral
+
+data_tests:
+  +store_failures: true

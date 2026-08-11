@@ -16,7 +16,7 @@ SELECT
     l.room_type,
     l.minimum_nights,
     l.price,
-    l.host_id,
+    l.HOST_ID,
     h.host_name,
     h.is_superhost as host_is_superhost,
     l.created_at,

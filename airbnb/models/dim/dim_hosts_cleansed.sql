@@ -10,7 +10,7 @@ With src_hosts as (
 select
     HOST_ID,
     NVL(host_name, 'Anonymous') AS host_name,
-    IS_Superhost,
+    is_superhost,
     created_at,
     updated_at
 from src_hosts
