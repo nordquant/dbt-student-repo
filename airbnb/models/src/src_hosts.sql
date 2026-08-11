@@ -8,3 +8,5 @@ is_superhost,
 created_at,
 updated_at
 from src_hosts
+
+-- TEST: GitHub to dbt Cloud
