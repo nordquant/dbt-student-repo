@@ -5,6 +5,7 @@ models:
   # ============================================================
 
   - name: dim_listings_cleansed
+    description: "This table contains the cleansed listings data from Airbnb."
     data_tests:
       - minimum_row_count:
           arguments:
@@ -25,6 +26,7 @@ models:
                 field: host_id
 
       - name: room_type
+        description: "The type of room offered for rent."
         data_tests:
           - accepted_values:
               arguments:
@@ -34,6 +36,7 @@ models:
                   - 'Shared room'
                   - 'Hotel room'
       - name: minimum_nights
+        description: '{{ doc("dim_listing_cleansed__minimum_nights")}}'
         data_tests:
           - positive_values
 
@@ -42,7 +45,7 @@ models:
   # ============================================================
 
   - name: dim_hosts_cleansed
-
+    description: "This table contains the cleansed hosts data from Airbnb."
     config:
       contract:
         enforced: true
@@ -50,17 +53,20 @@ models:
     columns:
 
       - name: host_id
+        description: "The unique identifier for each host."
         data_type: integer
         data_tests:
           - unique
           - not_null
 
       - name: host_name
+        description: "The name of the host."
         data_type: string
         data_tests:
           - not_null
 
       - name: is_superhost
+        description: "Indicates whether the host is a superhost ('t' for true, 'f' for false)."
         data_type: string
         data_tests:
           - accepted_values:
@@ -70,7 +76,9 @@ models:
                   - 'f'
 
       - name: updated_at
+        description: "The timestamp when the host record was last updated."
         data_type: timestamp
 
       - name: created_at
+        description: "The timestamp when the host record was created."
         data_type: timestamp

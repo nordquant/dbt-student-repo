@@ -9,6 +9,7 @@ seed-paths: ["seeds"]
 model-paths: ["models"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
+asset-paths: ["assets"]
 
 clean-targets:
   - "target"
