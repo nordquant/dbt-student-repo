@@ -1,0 +1,3 @@
+{
+    "dbt.dbtPythonPathOverride": "c:\\Users\\manda\\Desktop\\DBT_Snowflake\\dbt-student-repo\\airbnb\\.venv\\Scripts\\python.exe"
+}
