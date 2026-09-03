@@ -7,7 +7,7 @@ The easiest way is to take a look at your Snowflake Registration email and copy 
 
 ## Automated Snowflake Setup
 I encourage you to go through the automated Snowflake Setup as importing the data and setting the permissions from scratch might take quite some time.
-Follow the instructions here https://udemy-dbt-setup.streamlit.app/ to set up your Snowflake database with a click of a button! ( If you encounter any issues with the link below, here is a backup server of the same application: https://dbtsetup.nordquant.com/ )
+Follow the instructions here https://dbtsetup.nordquant.com/  to set up your Snowflake database with a click of a button! ( If you encounter any issues with the link below, here is a backup service of the same application: https://udemy-dbt-setup.streamlit.app/ )
 
 ## Snowflake data import (manual)
 _Only execute these commands if you decided to skip the Automated Snowflake Setup._
@@ -185,6 +185,8 @@ Create a dbt project (all platforms):
 dbt init --skip-profile-setup airbnb
 ```
 Once done, drag and drop the `profiles.yml` file you downloaded to the `airbnb` folder.
+
+Once `profiles.yml` is in place, **`cd airbnb` and ensure you execute every `dbt ...` command from the `airbnb` folder**.
 
 # Models
 ## Code used in the lesson
@@ -792,6 +794,10 @@ Compile and execute the macro:
 dbt compile --inline "SELECT * FROM {{ ref('dim_listings_cleansed') }} WHERE {{ no_empty_strings(ref('dim_listings_cleansed')) }}"
 dbt show --inline "SELECT * FROM {{ ref('dim_listings_cleansed') }} WHERE {{ no_empty_strings(ref('dim_listings_cleansed')) }}"
 ```
+
+Want to dive deep into `adapter`? [Here is the documentation.](https://docs.getdbt.com/reference/dbt-jinja-functions/adapter?version=2.0&name=Fusion)
+
+
 ## Custom Generic Tests
 The contents of `tests/generic/positive_values.sql`
 ```sql
